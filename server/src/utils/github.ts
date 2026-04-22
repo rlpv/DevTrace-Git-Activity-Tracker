@@ -1,5 +1,26 @@
 import { CommitEntry, DateWindow, RepoActivity } from '../types.js';
 
+export type GitHubErrorCode =
+  | 'GITHUB_INVALID_TOKEN'
+  | 'GITHUB_PUBLIC_RATE_LIMIT'
+  | 'GITHUB_AUTH_RATE_LIMIT'
+  | 'GITHUB_FORBIDDEN'
+  | 'GITHUB_NOT_FOUND'
+  | 'GITHUB_PRIVATE_REPO_REQUIRES_TOKEN';
+
+export class GitHubApiError extends Error {
+  readonly code: GitHubErrorCode;
+  readonly status: number;
+  readonly resetAt?: string;
+
+  constructor(code: GitHubErrorCode, message: string, status: number, resetAt?: string) {
+    super(message);
+    this.code = code;
+    this.status = status;
+    this.resetAt = resetAt;
+  }
+}
+
 interface GithubCommitItem {
   sha: string;
   commit: {
@@ -71,46 +92,121 @@ function buildGithubHeaders(token?: string): Record<string, string> {
   return headers;
 }
 
-async function githubFetch<T>(url: string, token?: string): Promise<T> {
+function parseResetAt(resetHeaderValue: string | null): string | undefined {
+  if (!resetHeaderValue) {
+    return undefined;
+  }
+
+  const epoch = Number(resetHeaderValue);
+  if (Number.isNaN(epoch)) {
+    return undefined;
+  }
+
+  return new Date(epoch * 1000).toISOString();
+}
+
+function buildGithubError(
+  status: number,
+  tokenProvided: boolean,
+  remaining: string | null,
+  resetAt: string | undefined,
+  apiMessage: string,
+  repoInfoWithoutToken: boolean,
+): GitHubApiError {
+  if (status === 401) {
+    return new GitHubApiError(
+      'GITHUB_INVALID_TOKEN',
+      'GitHub token is invalid or expired.',
+      401,
+      resetAt,
+    );
+  }
+
+  if (status === 403) {
+    const rateLimited =
+      remaining === '0' ||
+      apiMessage.includes('rate limit') ||
+      apiMessage.includes('abuse detection');
+
+    if (rateLimited) {
+      return new GitHubApiError(
+        tokenProvided ? 'GITHUB_AUTH_RATE_LIMIT' : 'GITHUB_PUBLIC_RATE_LIMIT',
+        tokenProvided
+          ? 'GitHub authenticated rate limit exceeded.'
+          : 'GitHub public rate limit exceeded.',
+        403,
+        resetAt,
+      );
+    }
+
+    return new GitHubApiError(
+      'GITHUB_FORBIDDEN',
+      'GitHub request is forbidden for the current access scope.',
+      403,
+      resetAt,
+    );
+  }
+
+  if (status === 404) {
+    if (repoInfoWithoutToken) {
+      return new GitHubApiError(
+        'GITHUB_PRIVATE_REPO_REQUIRES_TOKEN',
+        'Private repository access requires a GitHub token.',
+        404,
+        resetAt,
+      );
+    }
+
+    return new GitHubApiError(
+      'GITHUB_NOT_FOUND',
+      'GitHub resource was not found.',
+      404,
+      resetAt,
+    );
+  }
+
+  return new GitHubApiError(
+    'GITHUB_FORBIDDEN',
+    'GitHub request failed.',
+    status,
+    resetAt,
+  );
+}
+
+async function githubFetch<T>(
+  url: string,
+  token?: string,
+  context?: { repoInfoWithoutToken?: boolean },
+): Promise<T> {
   const response = await fetch(url, {
     headers: buildGithubHeaders(token),
   });
 
   if (!response.ok) {
     const remaining = response.headers.get('x-ratelimit-remaining');
-    const resetAt = response.headers.get('x-ratelimit-reset');
+    const resetAt = parseResetAt(response.headers.get('x-ratelimit-reset'));
     const responseBody = (await response.json().catch(() => null)) as { message?: string } | null;
     const apiMessage = responseBody?.message?.toLowerCase() ?? '';
 
-    if (response.status === 401) {
-      throw new Error('GitHub authentication failed (401). Check your token value or token format.');
-    }
-    if (response.status === 403) {
-      const rateLimited =
-        remaining === '0' ||
-        apiMessage.includes('rate limit') ||
-        apiMessage.includes('abuse detection');
-      if (rateLimited) {
-        const resetHint = resetAt
-          ? ` Rate limit resets at ${new Date(Number(resetAt) * 1000).toLocaleString()}.`
-          : '';
-        throw new Error(`GitHub API rate limit exceeded.${resetHint}`);
-      }
-      throw new Error(token
-        ? 'GitHub access forbidden (403). Token lacks required repository permissions.'
-        : 'GitHub public access forbidden (403). This can happen due to rate limits or temporary throttling.');
-    }
-    if (response.status === 404) {
-      throw new Error('GitHub repository or user not found, or it is private and inaccessible with current credentials.');
-    }
-    throw new Error(`GitHub request failed with status ${response.status}${responseBody?.message ? `: ${responseBody.message}` : ''}.`);
+    throw buildGithubError(
+      response.status,
+      Boolean(token),
+      remaining,
+      resetAt,
+      apiMessage,
+      Boolean(context?.repoInfoWithoutToken),
+    );
   }
 
   return (await response.json()) as T;
 }
 
 async function fetchGithubRepoInfo(repoFullName: string, token?: string): Promise<GithubRepoInfo> {
-  return githubFetch<GithubRepoInfo>(`https://api.github.com/repos/${repoFullName}`, token);
+  return githubFetch<GithubRepoInfo>(
+    `https://api.github.com/repos/${repoFullName}`,
+    token,
+    { repoInfoWithoutToken: !token },
+  );
 }
 
 async function fetchGithubRepoCommits(repoFullName: string, token: string | undefined, dateWindow: DateWindow): Promise<CommitEntry[]> {

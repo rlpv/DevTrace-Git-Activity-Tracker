@@ -1,3 +1,11 @@
+export class GitHubApiError extends Error {
+    constructor(code, message, status, resetAt) {
+        super(message);
+        this.code = code;
+        this.status = status;
+        this.resetAt = resetAt;
+    }
+}
 function hasMorePage(items) {
     return items.length === 100;
 }
@@ -37,41 +45,54 @@ function buildGithubHeaders(token) {
     }
     return headers;
 }
-async function githubFetch(url, token) {
+function parseResetAt(resetHeaderValue) {
+    if (!resetHeaderValue) {
+        return undefined;
+    }
+    const epoch = Number(resetHeaderValue);
+    if (Number.isNaN(epoch)) {
+        return undefined;
+    }
+    return new Date(epoch * 1000).toISOString();
+}
+function buildGithubError(status, tokenProvided, remaining, resetAt, apiMessage, repoInfoWithoutToken) {
+    if (status === 401) {
+        return new GitHubApiError('GITHUB_INVALID_TOKEN', 'GitHub token is invalid or expired.', 401, resetAt);
+    }
+    if (status === 403) {
+        const rateLimited = remaining === '0' ||
+            apiMessage.includes('rate limit') ||
+            apiMessage.includes('abuse detection');
+        if (rateLimited) {
+            return new GitHubApiError(tokenProvided ? 'GITHUB_AUTH_RATE_LIMIT' : 'GITHUB_PUBLIC_RATE_LIMIT', tokenProvided
+                ? 'GitHub authenticated rate limit exceeded.'
+                : 'GitHub public rate limit exceeded.', 403, resetAt);
+        }
+        return new GitHubApiError('GITHUB_FORBIDDEN', 'GitHub request is forbidden for the current access scope.', 403, resetAt);
+    }
+    if (status === 404) {
+        if (repoInfoWithoutToken) {
+            return new GitHubApiError('GITHUB_PRIVATE_REPO_REQUIRES_TOKEN', 'Private repository access requires a GitHub token.', 404, resetAt);
+        }
+        return new GitHubApiError('GITHUB_NOT_FOUND', 'GitHub resource was not found.', 404, resetAt);
+    }
+    return new GitHubApiError('GITHUB_FORBIDDEN', 'GitHub request failed.', status, resetAt);
+}
+async function githubFetch(url, token, context) {
     const response = await fetch(url, {
         headers: buildGithubHeaders(token),
     });
     if (!response.ok) {
         const remaining = response.headers.get('x-ratelimit-remaining');
-        const resetAt = response.headers.get('x-ratelimit-reset');
+        const resetAt = parseResetAt(response.headers.get('x-ratelimit-reset'));
         const responseBody = (await response.json().catch(() => null));
         const apiMessage = responseBody?.message?.toLowerCase() ?? '';
-        if (response.status === 401) {
-            throw new Error('GitHub authentication failed (401). Check your token value or token format.');
-        }
-        if (response.status === 403) {
-            const rateLimited = remaining === '0' ||
-                apiMessage.includes('rate limit') ||
-                apiMessage.includes('abuse detection');
-            if (rateLimited) {
-                const resetHint = resetAt
-                    ? ` Rate limit resets at ${new Date(Number(resetAt) * 1000).toLocaleString()}.`
-                    : '';
-                throw new Error(`GitHub API rate limit exceeded.${resetHint}`);
-            }
-            throw new Error(token
-                ? 'GitHub access forbidden (403). Token lacks required repository permissions.'
-                : 'GitHub public access forbidden (403). This can happen due to rate limits or temporary throttling.');
-        }
-        if (response.status === 404) {
-            throw new Error('GitHub repository or user not found, or it is private and inaccessible with current credentials.');
-        }
-        throw new Error(`GitHub request failed with status ${response.status}${responseBody?.message ? `: ${responseBody.message}` : ''}.`);
+        throw buildGithubError(response.status, Boolean(token), remaining, resetAt, apiMessage, Boolean(context?.repoInfoWithoutToken));
     }
     return (await response.json());
 }
 async function fetchGithubRepoInfo(repoFullName, token) {
-    return githubFetch(`https://api.github.com/repos/${repoFullName}`, token);
+    return githubFetch(`https://api.github.com/repos/${repoFullName}`, token, { repoInfoWithoutToken: !token });
 }
 async function fetchGithubRepoCommits(repoFullName, token, dateWindow) {
     const commits = [];

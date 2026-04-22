@@ -6,9 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DevTrace - Git Activity Tracker</title>
   <style>
-    html, body {
+    html,
+    body {
       margin: 0;
-      background: #0d1117;
+      background: #ffffff;
       color: #e2e8f0;
     }
 
@@ -19,29 +20,35 @@
 </head>
 
 <body class="preload">
-  <main class="mx-auto grid h-screen w-[96vw] max-w-[1380px] grid-cols-1 grid-rows-[auto_auto_1fr] gap-3 p-3 xl:grid-cols-[430px_minmax(0,1fr)] xl:grid-rows-[auto_minmax(0,1fr)] xl:[grid-template-areas:'hero_hero''search_results']">
+  <main
+    class="relative z-10 mx-auto grid h-screen w-[96vw] max-w-[1380px] grid-cols-1 grid-rows-[auto_auto_1fr] gap-3 p-3 xl:grid-cols-[430px_minmax(0,1fr)] xl:grid-rows-[auto_minmax(0,1fr)] xl:[grid-template-areas:'hero_hero''search_results']">
     <header class="panel-card grid gap-2 p-4 xl:[grid-area:hero]">
       <h1 class="m-0 text-2xl font-bold tracking-tight">DevTrace</h1>
-      <p class="m-0 text-sm text-slate-400">Track commit activity using repository (optional), username/author, token (optional), date/date range, and summary style.</p>
+      <p class="m-0 text-sm text-slate-400">Track, filter, and summarize commit activity using repository,
+        username/author, personal access token, date or date range, and selectable summary style.
+      </p>
     </header>
 
-    <section class="panel-card min-h-0 overflow-auto p-4 xl:[grid-area:search] scroll-thin">
+    <section class="panel-card min-h-0 overflow-auto p-4 xl:[grid-area:search] xl:self-start scroll-thin">
       <h2 class="mb-3 mt-0 text-base font-semibold">Search Activity</h2>
 
       <form id="activityForm" class="grid gap-3">
         <label class="field-label">
           Repository
-          <input id="repository" name="repository" type="text" class="field-input" placeholder="owner/repo or https://github.com/owner/repo (optional)" />
+          <input id="repository" name="repository" type="text" class="field-input"
+            placeholder="owner/repo or https://github.com/owner/repo (optional)" />
         </label>
 
         <label class="field-label">
           Username or Author
-          <input id="authorQuery" name="authorQuery" type="text" class="field-input" placeholder="ralph / RalphSpace / ralph@example.com" required />
+          <input id="authorQuery" name="authorQuery" type="text" class="field-input"
+            placeholder="ralph / RalphSpace / ralph@example.com" required />
         </label>
 
         <label class="field-label">
           Personal Access Token
-          <input id="token" name="token" type="password" class="field-input" autocomplete="off" placeholder="Optional token (blank = public only)" />
+          <input id="token" name="token" type="password" class="field-input" autocomplete="off"
+            placeholder="Optional token (blank = public only)" />
         </label>
 
         <label class="field-label">
@@ -59,7 +66,8 @@
           </label>
         </div>
 
-        <div data-date-block="range" class="grid grid-cols-1 gap-3 rounded-xl border border-[#30363d] bg-[#0f141b] p-3 md:grid-cols-2" hidden>
+        <div data-date-block="range"
+          class="grid grid-cols-1 gap-3 rounded-xl border border-[#30363d] bg-[#0f141b] p-3 md:grid-cols-2" hidden>
           <label class="field-label">
             Start Date
             <input id="rangeStart" name="rangeStart" type="date" class="field-input" />

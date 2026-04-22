@@ -1,11 +1,38 @@
-import { Router } from 'express';
+import { Response, Router } from 'express';
 import { ActivityRequest, ActivityResponse, ProviderType, RepoActivity } from '../types.js';
 import { resolveDateWindow } from '../utils/date.js';
-import { fetchGithubAllActivity, fetchGithubRepositoryActivity } from '../utils/github.js';
+import { fetchGithubAllActivity, fetchGithubRepositoryActivity, GitHubApiError } from '../utils/github.js';
 import { fetchGitlabAllActivity, fetchGitlabRepositoryActivity } from '../utils/gitlab.js';
 import { finalizeRepositories, summarizeOverall } from '../utils/normalize.js';
 
 const activityRouter = Router();
+
+interface StructuredErrorResponse {
+  success: false;
+  code: string;
+  message: string;
+  details?: {
+    resetAt?: string;
+  };
+  error: string;
+}
+
+function sendStructuredError(
+  res: Response,
+  status: number,
+  code: string,
+  message: string,
+  resetAt?: string,
+) {
+  const payload: StructuredErrorResponse = {
+    success: false,
+    code,
+    message,
+    details: resetAt ? { resetAt } : undefined,
+    error: message,
+  };
+  return res.status(status).json(payload);
+}
 
 function isRequestBody(body: unknown): body is ActivityRequest {
   if (!body || typeof body !== 'object') {
@@ -32,7 +59,7 @@ function resolveProvider(repository: string): ProviderType {
 
 activityRouter.post('/', async (req, res) => {
   if (!isRequestBody(req.body)) {
-    return res.status(400).json({ error: 'Invalid request payload.' });
+    return sendStructuredError(res, 400, 'INVALID_REQUEST', 'Invalid request payload.');
   }
 
   const payload = req.body;
@@ -41,7 +68,7 @@ activityRouter.post('/', async (req, res) => {
   const token = payload.token?.trim() || undefined;
 
   if (!authorQuery) {
-    return res.status(400).json({ error: 'Username or author is required.' });
+    return sendStructuredError(res, 400, 'INVALID_AUTHOR_QUERY', 'Username or author is required.');
   }
 
   const warnings: string[] = [];
@@ -67,7 +94,6 @@ activityRouter.post('/', async (req, res) => {
 
       repositories = [repoActivity];
     } else {
-      // Blank repository means scan all available repos for target scope.
       const githubActivities = await fetchGithubAllActivity(authorQuery, authorQuery, token, dateWindow, warnings);
       let gitlabActivities: RepoActivity[] = [];
 
@@ -92,10 +118,17 @@ activityRouter.post('/', async (req, res) => {
       warnings: warnings.length > 0 ? warnings : undefined,
     };
 
-    return res.json(response);
+    return res.json({
+      success: true,
+      ...response,
+    });
   } catch (error) {
+    if (error instanceof GitHubApiError) {
+      return sendStructuredError(res, error.status, error.code, error.message, error.resetAt);
+    }
+
     const message = error instanceof Error ? error.message : 'Failed to fetch repository activity.';
-    return res.status(400).json({ error: message });
+    return sendStructuredError(res, 400, 'ACTIVITY_FETCH_FAILED', message);
   }
 });
 

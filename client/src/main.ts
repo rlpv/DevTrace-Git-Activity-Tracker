@@ -3,6 +3,7 @@ import { ActivityRequest, ActivityResponse, AppState, DateFilter, RepoActivity }
 import { escapeHtml, formatDate, shortHash } from './utils/format.js';
 import { loadPreferences, savePreferences } from './utils/storage.js';
 import { dateModeLabel, summaryStyleLabel } from './utils/summary.js';
+import { mountDarkVeil } from './utils/darkVeil.js';
 
 const env = (import.meta as ImportMeta & { env: { VITE_API_BASE_URL?: string } }).env;
 const API_BASE_URL = env.VITE_API_BASE_URL ?? 'http://localhost:4000';
@@ -154,6 +155,24 @@ function repoMeta(repo: RepoActivity): string {
   return `Source: ${repo.source} | Provider: ${repo.provider} | Commits: ${repo.commitCount}`;
 }
 
+function copyIconButton(copyType: 'overall' | 'repo', label: string, repoIndex?: number): string {
+  const repoIndexAttr = typeof repoIndex === 'number' ? ` data-repo-index="${repoIndex}"` : '';
+  return `
+    <button
+      type="button"
+      class="btn-secondary h-9 w-9 p-0"
+      data-copy="${copyType}"${repoIndexAttr}
+      aria-label="${escapeHtml(label)}"
+      title="${escapeHtml(label)}"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+    </button>
+  `;
+}
+
 function renderRepo(repo: RepoActivity, index: number): string {
   return `
     <article class="rounded-xl border border-[#30363d] bg-[#0f141b] p-3">
@@ -163,7 +182,7 @@ function renderRepo(repo: RepoActivity, index: number): string {
           <p class="mt-1 text-xs text-slate-400">${escapeHtml(repoMeta(repo))}</p>
           <p class="mt-1 break-all text-xs text-slate-500">${escapeHtml(repo.repoPathOrUrl)}</p>
         </div>
-        <button type="button" class="btn-secondary" data-copy="repo" data-repo-index="${index}">Copy Repo Summary</button>
+        ${copyIconButton('repo', 'Copy repository summary', index)}
       </header>
       <section class="mt-3">
         <h4 class="m-0 text-sm font-semibold">Repository Summary</h4>
@@ -227,7 +246,7 @@ function renderResult(response: ActivityResponse): void {
           <h3 class="m-0 text-base font-semibold">Overall Summary</h3>
           <p class="mt-1 text-xs text-slate-400">${escapeHtml(`Repository: ${response.repository || 'All available repositories for target'} | Commits: ${response.totalCommitCount} | Style: ${summaryStyleLabel(state.summaryStyle)} | Date: ${dateModeLabel(state.dateFilterMode)}`)}</p>
         </div>
-        <button type="button" class="btn-primary" data-copy="overall">Copy Overall Summary</button>
+        ${copyIconButton('overall', 'Copy overall summary')}
       </header>
       <pre class="summary-pre mt-2">${escapeHtml(response.overallSummary)}</pre>
     </section>
@@ -382,4 +401,12 @@ syncFormFromState();
 applyDateConstraints();
 ui.statusNode.textContent = 'Ready. Repository and token are optional based on your access scope.';
 renderInfoCard('Ready to fetch', 'Enter filters and click "Fetch Activity" to see commit results.');
+mountDarkVeil(document.body, {
+  hueShift: 0,
+  noiseIntensity: 0,
+  scanlineIntensity: 0,
+  speed: 0.5,
+  scanlineFrequency: 0,
+  warpAmount: 0,
+});
 document.body.classList.remove('preload');
