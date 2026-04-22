@@ -382,3 +382,4 @@ syncFormFromState();
 applyDateConstraints();
 ui.statusNode.textContent = 'Ready. Repository and token are optional based on your access scope.';
 renderInfoCard('Ready to fetch', 'Enter filters and click "Fetch Activity" to see commit results.');
+document.body.classList.remove('preload');

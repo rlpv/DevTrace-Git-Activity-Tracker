@@ -5,11 +5,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DevTrace - Git Activity Tracker</title>
-  <script type="module" crossorigin src="/assets/index-D8EMlVHS.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      background: #0d1117;
+      color: #e2e8f0;
+    }
+
+    body.preload main {
+      opacity: 0;
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index-JJ8NUrTz.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-B7CE9WTt.css">
 </head>
 
-<body>
+<body class="preload">
   <main class="mx-auto grid h-screen w-[96vw] max-w-[1380px] grid-cols-1 grid-rows-[auto_auto_1fr] gap-3 p-3 xl:grid-cols-[430px_minmax(0,1fr)] xl:grid-rows-[auto_minmax(0,1fr)] xl:[grid-template-areas:'hero_hero''search_results']">
     <header class="panel-card grid gap-2 p-4 xl:[grid-area:hero]">
       <h1 class="m-0 text-2xl font-bold tracking-tight">DevTrace</h1>
