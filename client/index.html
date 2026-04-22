@@ -30,19 +30,18 @@
     </header>
 
     <section class="panel-card min-h-0 overflow-auto p-4 xl:[grid-area:search] xl:self-start scroll-thin">
-      <h2 class="mb-3 mt-0 text-base font-semibold">Search Activity</h2>
+      <h1 class="m-0 text-2xl font-bold tracking-tight">Search Activity</h1>
 
       <form id="activityForm" class="grid gap-3">
         <label class="field-label">
           Repository
           <input id="repository" name="repository" type="text" class="field-input"
-            placeholder="owner/repo or https://github.com/owner/repo (optional)" />
+            placeholder="repo link https://github.com/owner/repo (optional)" />
         </label>
 
         <label class="field-label">
           Username or Author
-          <input id="authorQuery" name="authorQuery" type="text" class="field-input"
-            placeholder="ralph / RalphSpace / ralph@example.com" required />
+          <input id="authorQuery" name="authorQuery" type="text" class="field-input" placeholder="username" required />
         </label>
 
         <label class="field-label">
@@ -94,7 +93,7 @@
     </section>
 
     <section class="panel-card grid min-h-0 grid-rows-[auto_auto_auto_minmax(0,1fr)] p-4 xl:[grid-area:results]">
-      <h2 class="m-0 text-base font-semibold">Results</h2>
+      <h1 class="m-0 text-2xl font-bold tracking-tight">Results</h1>
       <p id="status" class="mt-2 text-sm text-slate-400"></p>
       <div id="warnings" class="mt-2 hidden rounded-xl border border-amber-700 bg-amber-950/50 p-3"></div>
       <div id="output" class="scroll-thin mt-3 grid min-h-0 gap-3 overflow-auto pr-1"></div>

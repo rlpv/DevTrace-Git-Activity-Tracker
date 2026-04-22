@@ -4,6 +4,7 @@ import { escapeHtml, formatDate, shortHash } from './utils/format.js';
 import { loadPreferences, savePreferences } from './utils/storage.js';
 import { dateModeLabel, summaryStyleLabel } from './utils/summary.js';
 import { mountDarkVeil } from './utils/darkVeil.js';
+import { mountMagicBento } from './utils/magicBento.js';
 
 const env = (import.meta as ImportMeta & { env: { VITE_API_BASE_URL?: string } }).env;
 const API_BASE_URL = env.VITE_API_BASE_URL ?? 'http://localhost:4000';
@@ -408,5 +409,20 @@ mountDarkVeil(document.body, {
   speed: 0.5,
   scanlineFrequency: 0,
   warpAmount: 0,
+});
+document.querySelectorAll<HTMLElement>('.panel-card').forEach((card) => {
+  mountMagicBento(card, {
+    textAutoHide: true,
+    enableStars: true,
+    enableSpotlight: true,
+    enableBorderGlow: true,
+    enableTilt: false,
+    enableMagnetism: false,
+    clickEffect: true,
+    spotlightRadius: 400,
+    particleCount: 12,
+    glowColor: '132, 0, 255',
+    disableAnimations: false,
+  });
 });
 document.body.classList.remove('preload');
