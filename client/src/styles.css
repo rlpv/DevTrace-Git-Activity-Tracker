@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+@layer base {
+  body {
+    @apply m-0 bg-[#0d1117] text-slate-100 antialiased;
+  }
+}
+
+@layer components {
+  .panel-card {
+    @apply rounded-2xl border border-[#30363d] bg-[#161b22] shadow-[0_12px_28px_rgba(0,0,0,0.35)];
+  }
+
+  .field-input {
+    @apply w-full rounded-xl border border-[#30363d] bg-[#1f2630] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30;
+  }
+
+  .field-label {
+    @apply grid gap-1 text-sm font-semibold text-slate-400;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl border border-transparent bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-600;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-[#30363d] bg-[#1f2630] px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:border-slate-400;
+  }
+
+  .summary-pre {
+    @apply m-0 whitespace-pre-wrap rounded-lg border border-[#30363d] bg-[#0f141b] p-3 text-sm;
+  }
+
+  .scroll-thin {
+    scrollbar-width: thin;
+  }
+}
