@@ -42,6 +42,9 @@ interface GithubRepoInfo {
   html_url: string;
 }
 
+const DEFAULT_PUBLIC_REPO_SCAN_LIMIT = 20;
+const DEFAULT_AUTH_REPO_SCAN_LIMIT = 80;
+
 function hasMorePage<T>(items: T[]): boolean {
   return items.length === 100;
 }
@@ -103,6 +106,41 @@ function parseResetAt(resetHeaderValue: string | null): string | undefined {
   }
 
   return new Date(epoch * 1000).toISOString();
+}
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const value = process.env[name];
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return Math.floor(parsed);
+}
+
+function isGithubRateLimitError(error: unknown): error is GitHubApiError {
+  return (
+    error instanceof GitHubApiError &&
+    (error.code === 'GITHUB_PUBLIC_RATE_LIMIT' || error.code === 'GITHUB_AUTH_RATE_LIMIT')
+  );
+}
+
+function resolveGithubAuthorParam(authorQuery: string): string | undefined {
+  const candidate = authorQuery.trim();
+  if (!candidate) {
+    return undefined;
+  }
+
+  // GitHub commit-list `author` accepts login or email. Skip full-name style queries.
+  if (candidate.includes(' ')) {
+    return undefined;
+  }
+
+  return candidate;
 }
 
 function buildGithubError(
@@ -209,7 +247,12 @@ async function fetchGithubRepoInfo(repoFullName: string, token?: string): Promis
   );
 }
 
-async function fetchGithubRepoCommits(repoFullName: string, token: string | undefined, dateWindow: DateWindow): Promise<CommitEntry[]> {
+async function fetchGithubRepoCommits(
+  repoFullName: string,
+  token: string | undefined,
+  dateWindow: DateWindow,
+  authorQuery?: string,
+): Promise<CommitEntry[]> {
   const commits: CommitEntry[] = [];
   let page = 1;
 
@@ -224,6 +267,10 @@ async function fetchGithubRepoCommits(repoFullName: string, token: string | unde
     }
     if (dateWindow.until) {
       params.set('until', dateWindow.until);
+    }
+    const authorParam = resolveGithubAuthorParam(authorQuery ?? '');
+    if (authorParam) {
+      params.set('author', authorParam);
     }
 
     const url = `https://api.github.com/repos/${repoFullName}/commits?${params.toString()}`;
@@ -295,7 +342,7 @@ export async function fetchGithubRepositoryActivity(
   }
 
   const repoInfo = await fetchGithubRepoInfo(repoFullName, token);
-  const commits = await fetchGithubRepoCommits(repoInfo.full_name, token, dateWindow);
+  const commits = await fetchGithubRepoCommits(repoInfo.full_name, token, dateWindow, authorQuery);
   const filtered = commits.filter((commit) => matchAuthor(authorQuery, commit));
 
   return {
@@ -319,12 +366,20 @@ export async function fetchGithubAllActivity(
   const repos = token
     ? await fetchGithubAccessibleRepos(token)
     : await fetchGithubPublicUserRepos(targetUser);
+  const maxRepos = token
+    ? readPositiveIntEnv('GITHUB_MAX_AUTH_REPOS', DEFAULT_AUTH_REPO_SCAN_LIMIT)
+    : readPositiveIntEnv('GITHUB_MAX_PUBLIC_REPOS', DEFAULT_PUBLIC_REPO_SCAN_LIMIT);
+  const reposToScan = repos.slice(0, maxRepos);
+
+  if (repos.length > reposToScan.length) {
+    warnings.push(`GitHub: Scanning ${reposToScan.length} of ${repos.length} repositories to reduce API usage.`);
+  }
 
   const activities: RepoActivity[] = [];
 
-  for (const repo of repos) {
+  for (const repo of reposToScan) {
     try {
-      const commits = await fetchGithubRepoCommits(repo.full_name, token, dateWindow);
+      const commits = await fetchGithubRepoCommits(repo.full_name, token, dateWindow, authorQuery);
       const filtered = commits.filter((commit) => matchAuthor(authorQuery, commit));
 
       if (filtered.length === 0) {
@@ -340,7 +395,13 @@ export async function fetchGithubAllActivity(
         commits: filtered,
         summary: '',
       });
-    } catch {
+    } catch (error) {
+      if (isGithubRateLimitError(error)) {
+        const resetNote = error.resetAt ? ` Reset at ${error.resetAt}.` : '';
+        warnings.push(`GitHub rate limit reached while scanning repositories.${resetNote} Add a token or narrow repository/date filters.`);
+        break;
+      }
+
       warnings.push(`GitHub: Failed to process ${repo.full_name}.`);
     }
   }

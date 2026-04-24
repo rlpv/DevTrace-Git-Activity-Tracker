@@ -361,8 +361,13 @@ async function submitSearch(event: SubmitEvent): Promise<void> {
     });
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({ error: 'Request failed.' }));
-      throw new Error(err.error ?? 'Request failed.');
+      const err = (await response.json().catch(() => ({ error: 'Request failed.' }))) as {
+        error?: string;
+        details?: { resetAt?: string };
+      };
+      const resetAt = err.details?.resetAt;
+      const suffix = resetAt ? ` Retry after ${new Date(resetAt).toLocaleString()}.` : '';
+      throw new Error(`${err.error ?? 'Request failed.'}${suffix}`);
     }
 
     const data = (await response.json()) as ActivityResponse;
