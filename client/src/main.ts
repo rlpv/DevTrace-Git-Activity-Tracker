@@ -29,11 +29,14 @@ const form = document.querySelector<HTMLFormElement>('#activityForm');
 const repositoryInput = document.querySelector<HTMLInputElement>('#repository');
 const authorInput = document.querySelector<HTMLInputElement>('#authorQuery');
 const tokenInput = document.querySelector<HTMLInputElement>('#token');
+const tokenHelpTrigger = document.querySelector<HTMLButtonElement>('#tokenHelpTrigger');
 const summaryStyleSelect = document.querySelector<HTMLSelectElement>('#summaryStyle');
 const dateFilterModeSelect = document.querySelector<HTMLSelectElement>('#dateFilterMode');
 const specificDateInput = document.querySelector<HTMLInputElement>('#specificDate');
 const rangeStartInput = document.querySelector<HTMLInputElement>('#rangeStart');
 const rangeEndInput = document.querySelector<HTMLInputElement>('#rangeEnd');
+const tokenHelpModal = document.querySelector<HTMLElement>('#tokenHelpModal');
+const tokenHelpClose = document.querySelector<HTMLButtonElement>('#tokenHelpClose');
 
 const specificDateSection = document.querySelector<HTMLElement>('[data-date-block="specific"]');
 const rangeDateSection = document.querySelector<HTMLElement>('[data-date-block="range"]');
@@ -53,6 +56,9 @@ const ui = {
   repositoryInput: assertNode(repositoryInput, '#repository'),
   authorInput: assertNode(authorInput, '#authorQuery'),
   tokenInput: assertNode(tokenInput, '#token'),
+  tokenHelpTrigger: assertNode(tokenHelpTrigger, '#tokenHelpTrigger'),
+  tokenHelpModal: assertNode(tokenHelpModal, '#tokenHelpModal'),
+  tokenHelpClose: assertNode(tokenHelpClose, '#tokenHelpClose'),
   summaryStyleSelect: assertNode(summaryStyleSelect, '#summaryStyle'),
   dateFilterModeSelect: assertNode(dateFilterModeSelect, '#dateFilterMode'),
   specificDateInput: assertNode(specificDateInput, '#specificDate'),
@@ -318,6 +324,16 @@ function validateDateInputs(): string | undefined {
   return undefined;
 }
 
+function openTokenHelpModal(): void {
+  ui.tokenHelpModal.classList.remove('hidden');
+  ui.tokenHelpModal.classList.add('flex');
+}
+
+function closeTokenHelpModal(): void {
+  ui.tokenHelpModal.classList.remove('flex');
+  ui.tokenHelpModal.classList.add('hidden');
+}
+
 async function submitSearch(event: SubmitEvent): Promise<void> {
   event.preventDefault();
   updateStateAndPersist();
@@ -388,6 +404,19 @@ async function submitSearch(event: SubmitEvent): Promise<void> {
 
 ui.form.addEventListener('submit', (event) => {
   void submitSearch(event);
+});
+
+ui.tokenHelpTrigger.addEventListener('click', openTokenHelpModal);
+ui.tokenHelpClose.addEventListener('click', closeTokenHelpModal);
+ui.tokenHelpModal.addEventListener('click', (event) => {
+  if (event.target === ui.tokenHelpModal) {
+    closeTokenHelpModal();
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !ui.tokenHelpModal.classList.contains('hidden')) {
+    closeTokenHelpModal();
+  }
 });
 
 [
