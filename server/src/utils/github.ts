@@ -50,16 +50,42 @@ function hasMorePage<T>(items: T[]): boolean {
 }
 
 function normalizeGithubRepo(input: string): string | undefined {
-  const trimmed = input.trim().replace(/\.git$/i, '');
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return undefined;
+  }
 
-  const urlMatch = trimmed.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)$/i);
-  if (urlMatch) {
-    return `${urlMatch[1]}/${urlMatch[2]}`;
+  const sshMatch = trimmed.match(/^git@github\.com:([^/\s]+)\/([^/\s]+?)(?:\.git)?$/i);
+  if (sshMatch) {
+    return `${sshMatch[1]}/${sshMatch[2]}`;
+  }
+
+  // Accept URL variants like:
+  // - https://github.com/owner/repo
+  // - https://github.com/owner/repo/
+  // - https://github.com/owner/repo/tree/main
+  // - https://www.github.com/owner/repo.git
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      const host = parsed.hostname.toLowerCase();
+      if (host === 'github.com' || host === 'www.github.com') {
+        const [owner, repoRaw] = parsed.pathname.split('/').filter(Boolean);
+        if (owner && repoRaw) {
+          const repo = repoRaw.replace(/\.git$/i, '');
+          if (repo) {
+            return `${owner}/${repo}`;
+          }
+        }
+      }
+    } catch {
+      // Fall through to slug parsing.
+    }
   }
 
   const slugMatch = trimmed.match(/^([^/\s]+)\/([^/\s]+)$/);
   if (slugMatch) {
-    return `${slugMatch[1]}/${slugMatch[2]}`;
+    return `${slugMatch[1]}/${slugMatch[2].replace(/\.git$/i, '')}`;
   }
 
   return undefined;
