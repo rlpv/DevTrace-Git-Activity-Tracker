@@ -7,7 +7,7 @@ import { mountDarkVeil } from './utils/darkVeil.js';
 import { mountMagicBento } from './utils/magicBento.js';
 
 const env = (import.meta as ImportMeta & { env: { VITE_API_BASE_URL?: string } }).env;
-const API_BASE_URL = env.VITE_API_BASE_URL ?? 'http://localhost:4000';
+const API_BASE_URL = (env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
 const defaultState: AppState = {
   repository: '',
