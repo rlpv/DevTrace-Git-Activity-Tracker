@@ -43,6 +43,7 @@ const rangeStartInput = document.querySelector<HTMLInputElement>('#rangeStart');
 const rangeEndInput = document.querySelector<HTMLInputElement>('#rangeEnd');
 const tokenHelpModal = document.querySelector<HTMLElement>('#tokenHelpModal');
 const tokenHelpClose = document.querySelector<HTMLButtonElement>('#tokenHelpClose');
+const themeToggle = document.querySelector<HTMLButtonElement>('#themeToggle');
 
 const specificDateSection = document.querySelector<HTMLElement>('[data-date-block="specific"]');
 const rangeDateSection = document.querySelector<HTMLElement>('[data-date-block="range"]');
@@ -65,6 +66,7 @@ const ui = {
   tokenHelpTrigger: assertNode(tokenHelpTrigger, '#tokenHelpTrigger'),
   tokenHelpModal: assertNode(tokenHelpModal, '#tokenHelpModal'),
   tokenHelpClose: assertNode(tokenHelpClose, '#tokenHelpClose'),
+  themeToggle: assertNode(themeToggle, '#themeToggle'),
   summaryStyleSelect: assertNode(summaryStyleSelect, '#summaryStyle'),
   dateFilterModeSelect: assertNode(dateFilterModeSelect, '#dateFilterMode'),
   specificDateInput: assertNode(specificDateInput, '#specificDate'),
@@ -77,15 +79,45 @@ const ui = {
   outputNode: assertNode(outputNode, '#output'),
 };
 
+type ThemeMode = 'dark' | 'light';
+const THEME_KEY = 'devtrace.theme.v1';
+let themeTransitionTimer: number | undefined;
+
+function loadTheme(): ThemeMode {
+  try {
+    const raw = localStorage.getItem(THEME_KEY);
+    return raw === 'light' ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
+function applyTheme(mode: ThemeMode): void {
+  if (themeTransitionTimer) {
+    window.clearTimeout(themeTransitionTimer);
+  }
+  document.body.classList.add('theme-transitioning');
+  document.body.classList.toggle('theme-light', mode === 'light');
+  ui.themeToggle.setAttribute('aria-pressed', String(mode === 'light'));
+  themeTransitionTimer = window.setTimeout(() => {
+    document.body.classList.remove('theme-transitioning');
+  }, 340);
+}
+
+function saveTheme(mode: ThemeMode): void {
+  try {
+    localStorage.setItem(THEME_KEY, mode);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 function renderInfoCard(title: string, message: string, tone: 'neutral' | 'error' = 'neutral'): void {
-  const toneClasses =
-    tone === 'error'
-      ? 'border-rose-800 bg-rose-950/40 text-rose-200'
-      : 'border-[#30363d] bg-[#0f141b] text-slate-300';
+  const toneClasses = tone === 'error' ? 'info-card-error' : 'info-card-neutral';
 
   ui.outputNode.innerHTML = `
     <section class="grid min-h-[320px] place-items-center">
-      <div class="w-full max-w-xl rounded-2xl border p-8 text-center ${toneClasses}">
+      <div class="info-card w-full max-w-xl rounded-2xl border p-8 text-center ${toneClasses}">
         <h3 class="m-0 text-xl font-semibold">${escapeHtml(title)}</h3>
         <p class="mt-2 text-sm">${escapeHtml(message)}</p>
       </div>
@@ -188,7 +220,7 @@ function copyIconButton(copyType: 'overall' | 'repo', label: string, repoIndex?:
 
 function renderRepo(repo: RepoActivity, index: number): string {
   return `
-    <article class="rounded-xl border border-[#30363d] bg-[#0f141b] p-3">
+    <article class="repo-card rounded-xl border border-[#30363d] bg-[#0f141b] p-3">
       <header class="flex flex-col items-start justify-between gap-2 md:flex-row">
         <div>
           <h3 class="m-0 text-base font-semibold">${escapeHtml(repo.repoName)}</h3>
@@ -211,7 +243,7 @@ function renderRepo(repo: RepoActivity, index: number): string {
                 : '';
 
               return `
-                <li class="rounded-lg border border-[#30363d] bg-[#161b22] p-2">
+                <li class="commit-item rounded-lg border border-[#30363d] bg-[#161b22] p-2">
                   <div class="flex items-center justify-between gap-2 text-xs text-slate-300">
                     <strong>${escapeHtml(shortHash(commit.hash))}</strong>
                     <span>${escapeHtml(formatDate(commit.date))}</span>
@@ -233,8 +265,8 @@ function renderResult(response: ActivityResponse): void {
   if (response.totalCommitCount === 0 || response.repositories.length === 0) {
     ui.outputNode.innerHTML = `
       <section class="grid min-h-[320px] place-items-center">
-        <div class="w-full max-w-xl rounded-2xl border border-[#30363d] bg-[#0f141b] p-8 text-center">
-          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-[#30363d] bg-[#161b22] text-slate-300">
+        <div class="info-card info-card-neutral w-full max-w-xl rounded-2xl border border-[#30363d] bg-[#0f141b] p-8 text-center">
+          <div class="no-results-icon mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-[#30363d] bg-[#161b22] text-slate-300">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M9 3H5a2 2 0 0 0-2 2v4" />
               <path d="M3 9l3-3 3 3" />
@@ -253,7 +285,7 @@ function renderResult(response: ActivityResponse): void {
   }
 
   ui.outputNode.innerHTML = `
-    <section class="rounded-xl border border-[#30363d] bg-[#0f141b] p-3">
+    <section class="overall-card rounded-xl border border-[#30363d] bg-[#0f141b] p-3">
       <header class="flex flex-col items-start justify-between gap-2 md:flex-row">
         <div>
           <h3 class="m-0 text-base font-semibold">Overall Summary</h3>
@@ -448,6 +480,11 @@ ui.form.addEventListener('submit', (event) => {
 
 ui.tokenHelpTrigger.addEventListener('click', openTokenHelpModal);
 ui.tokenHelpClose.addEventListener('click', closeTokenHelpModal);
+ui.themeToggle.addEventListener('click', () => {
+  const nextTheme: ThemeMode = document.body.classList.contains('theme-light') ? 'dark' : 'light';
+  applyTheme(nextTheme);
+  saveTheme(nextTheme);
+});
 ui.tokenHelpModal.addEventListener('click', (event) => {
   if (event.target === ui.tokenHelpModal) {
     closeTokenHelpModal();
@@ -474,6 +511,7 @@ document.addEventListener('keydown', (event) => {
 
 syncFormFromState();
 applyDateConstraints();
+applyTheme(loadTheme());
 ui.statusNode.textContent = 'Ready. Repository and token are optional based on your access scope.';
 renderInfoCard('Ready to fetch', 'Enter filters and click "Fetch Activity" to see commit results.');
 mountDarkVeil(document.body, {

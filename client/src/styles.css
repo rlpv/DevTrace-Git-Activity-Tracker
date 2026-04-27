@@ -7,6 +7,12 @@
 @layer base {
   body {
     @apply m-0 bg-white text-slate-100 antialiased;
+    transition: background-color 280ms ease, color 280ms ease;
+  }
+
+  body.theme-light {
+    background: #eaf1fb;
+    color: #0f172a;
   }
 }
 
@@ -45,6 +51,12 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  transition: opacity 320ms ease, filter 320ms ease;
+}
+
+body.theme-light .dark-veil-canvas {
+  opacity: 0.18;
+  filter: saturate(0.45) brightness(1.25);
 }
 
 .magic-bento {
@@ -64,6 +76,7 @@
 .magic-bento-stars {
   z-index: 0;
   opacity: 0.45;
+  transition: opacity 260ms ease;
 }
 
 .magic-bento-spotlight {
@@ -74,6 +87,7 @@
       rgba(var(--magic-glow-color, 132, 0, 255), 0.18),
       transparent 65%
     );
+  transition: opacity 260ms ease;
 }
 
 .magic-bento > :not(.magic-bento-stars):not(.magic-bento-spotlight):not(.magic-bento-ripple) {
@@ -121,4 +135,161 @@
     transform: scale(12);
     opacity: 0;
   }
+}
+
+.theme-toggle {
+  position: relative;
+  width: 54px;
+  height: 30px;
+  border-radius: 9999px;
+  border: 1px solid #30363d;
+  background: linear-gradient(135deg, #0f172a 0%, #1f2937 100%);
+  cursor: pointer;
+  transition: background 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.theme-toggle:hover {
+  border-color: #64748b;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.theme-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: #f8fafc;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+  transition: transform 220ms ease, background 220ms ease;
+}
+
+.date-block,
+.overall-card,
+.repo-card,
+.commit-item,
+.info-card,
+.no-results-icon {
+  transition:
+    background-color 320ms ease,
+    color 320ms ease,
+    border-color 320ms ease,
+    box-shadow 320ms ease,
+    opacity 320ms ease;
+}
+
+body.theme-light .date-block {
+  border-color: #c7d3e5;
+  background: #f8fbff;
+}
+
+body.theme-light .overall-card,
+body.theme-light .repo-card,
+body.theme-light .commit-item,
+body.theme-light .summary-pre,
+body.theme-light .info-card {
+  border-color: #c7d3e5;
+  background: #f8fbff;
+  color: #0f172a;
+}
+
+body.theme-light .info-card-error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+body.theme-light .no-results-icon {
+  border-color: #c7d3e5;
+  background: #eef4ff;
+  color: #334155;
+}
+
+body.theme-light .theme-toggle {
+  background: linear-gradient(135deg, #bfdbfe 0%, #e2e8f0 100%);
+  border-color: #94a3b8;
+}
+
+body.theme-light .theme-toggle-thumb {
+  transform: translateX(24px);
+  background: #0f172a;
+}
+
+body.theme-light .panel-card {
+  border-color: #b8c6da;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
+}
+
+body.theme-light .field-input {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+body.theme-light .field-input::placeholder {
+  color: #64748b;
+}
+
+body.theme-light .field-label {
+  color: #1e293b;
+}
+
+body.theme-light .btn-secondary {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+body.theme-light .panel-card h1,
+body.theme-light .panel-card h2,
+body.theme-light .panel-card h3,
+body.theme-light .panel-card h4 {
+  color: #0f172a;
+}
+
+body.theme-light .panel-card p,
+body.theme-light .panel-card li,
+body.theme-light #status {
+  color: #334155;
+}
+
+body.theme-light .repo-card p,
+body.theme-light .repo-card li,
+body.theme-light .overall-card p,
+body.theme-light .info-card p {
+  color: #334155;
+}
+
+body.theme-light .panel-card a {
+  color: #1d4ed8;
+}
+
+body.theme-light .magic-bento-stars {
+  opacity: 0.15;
+}
+
+body.theme-light .magic-bento-spotlight {
+  opacity: 0.35;
+}
+
+body.theme-light .magic-text-auto-hide .magic-text-target {
+  opacity: 1;
+}
+
+body.theme-transitioning,
+body.theme-transitioning .panel-card,
+body.theme-transitioning .field-input,
+body.theme-transitioning .btn-secondary,
+body.theme-transitioning .summary-pre,
+body.theme-transitioning .magic-bento-stars,
+body.theme-transitioning .magic-bento-spotlight {
+  transition:
+    background-color 320ms ease,
+    color 320ms ease,
+    border-color 320ms ease,
+    box-shadow 320ms ease,
+    opacity 320ms ease,
+    filter 320ms ease;
 }
