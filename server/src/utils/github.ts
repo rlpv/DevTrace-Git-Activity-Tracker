@@ -42,8 +42,10 @@ interface GithubRepoInfo {
   html_url: string;
 }
 
-const DEFAULT_PUBLIC_REPO_SCAN_LIMIT = 20;
-const DEFAULT_AUTH_REPO_SCAN_LIMIT = 80;
+const DEFAULT_PUBLIC_REPO_SCAN_LIMIT = 8;
+const DEFAULT_AUTH_REPO_SCAN_LIMIT = 30;
+const DEFAULT_PUBLIC_COMMIT_PAGE_LIMIT = 2;
+const DEFAULT_AUTH_COMMIT_PAGE_LIMIT = 3;
 
 function hasMorePage<T>(items: T[]): boolean {
   return items.length === 100;
@@ -278,11 +280,17 @@ async function fetchGithubRepoCommits(
   token: string | undefined,
   dateWindow: DateWindow,
   authorQuery?: string,
+  options?: { maxPages?: number },
 ): Promise<CommitEntry[]> {
   const commits: CommitEntry[] = [];
   let page = 1;
+  const maxPages = options?.maxPages;
 
   while (true) {
+    if (maxPages && page > maxPages) {
+      break;
+    }
+
     const params = new URLSearchParams({
       per_page: '100',
       page: String(page),
@@ -395,17 +403,23 @@ export async function fetchGithubAllActivity(
   const maxRepos = token
     ? readPositiveIntEnv('GITHUB_MAX_AUTH_REPOS', DEFAULT_AUTH_REPO_SCAN_LIMIT)
     : readPositiveIntEnv('GITHUB_MAX_PUBLIC_REPOS', DEFAULT_PUBLIC_REPO_SCAN_LIMIT);
+  const maxCommitPages = token
+    ? readPositiveIntEnv('GITHUB_MAX_AUTH_COMMIT_PAGES', DEFAULT_AUTH_COMMIT_PAGE_LIMIT)
+    : readPositiveIntEnv('GITHUB_MAX_PUBLIC_COMMIT_PAGES', DEFAULT_PUBLIC_COMMIT_PAGE_LIMIT);
   const reposToScan = repos.slice(0, maxRepos);
 
   if (repos.length > reposToScan.length) {
     warnings.push(`GitHub: Scanning ${reposToScan.length} of ${repos.length} repositories to reduce API usage.`);
   }
+  warnings.push(`GitHub: Commit scan per repository is capped to ${maxCommitPages} page(s) for faster serverless responses.`);
 
   const activities: RepoActivity[] = [];
 
   for (const repo of reposToScan) {
     try {
-      const commits = await fetchGithubRepoCommits(repo.full_name, token, dateWindow, authorQuery);
+      const commits = await fetchGithubRepoCommits(repo.full_name, token, dateWindow, authorQuery, {
+        maxPages: maxCommitPages,
+      });
       const filtered = commits.filter((commit) => matchAuthor(authorQuery, commit));
 
       if (filtered.length === 0) {

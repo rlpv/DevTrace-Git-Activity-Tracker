@@ -21,6 +21,25 @@ function hasMorePage<T>(items: T[]): boolean {
   return items.length === 100;
 }
 
+const DEFAULT_PUBLIC_PROJECT_SCAN_LIMIT = 8;
+const DEFAULT_AUTH_PROJECT_SCAN_LIMIT = 30;
+const DEFAULT_PUBLIC_COMMIT_PAGE_LIMIT = 2;
+const DEFAULT_AUTH_COMMIT_PAGE_LIMIT = 3;
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const value = process.env[name];
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return Math.floor(parsed);
+}
+
 function normalizeGitlabRepo(input: string): string | undefined {
   const trimmed = input.trim().replace(/\.git$/i, '');
 
@@ -90,11 +109,21 @@ async function fetchGitlabProject(pathWithNamespace: string, token?: string): Pr
   return gitlabFetch<GitlabProject>(`https://gitlab.com/api/v4/projects/${encoded}`, token);
 }
 
-async function fetchGitlabProjectCommits(projectId: number, token: string | undefined, dateWindow: DateWindow): Promise<CommitEntry[]> {
+async function fetchGitlabProjectCommits(
+  projectId: number,
+  token: string | undefined,
+  dateWindow: DateWindow,
+  options?: { maxPages?: number },
+): Promise<CommitEntry[]> {
   const commits: CommitEntry[] = [];
   let page = 1;
+  const maxPages = options?.maxPages;
 
   while (true) {
+    if (maxPages && page > maxPages) {
+      break;
+    }
+
     const params = new URLSearchParams({
       per_page: '100',
       page: String(page),
@@ -212,12 +241,26 @@ export async function fetchGitlabAllActivity(
   const projects = token
     ? await fetchGitlabAccessibleProjects(token)
     : await fetchGitlabPublicUserProjects(targetUser);
+  const maxProjects = token
+    ? readPositiveIntEnv('GITLAB_MAX_AUTH_PROJECTS', DEFAULT_AUTH_PROJECT_SCAN_LIMIT)
+    : readPositiveIntEnv('GITLAB_MAX_PUBLIC_PROJECTS', DEFAULT_PUBLIC_PROJECT_SCAN_LIMIT);
+  const maxCommitPages = token
+    ? readPositiveIntEnv('GITLAB_MAX_AUTH_COMMIT_PAGES', DEFAULT_AUTH_COMMIT_PAGE_LIMIT)
+    : readPositiveIntEnv('GITLAB_MAX_PUBLIC_COMMIT_PAGES', DEFAULT_PUBLIC_COMMIT_PAGE_LIMIT);
+  const projectsToScan = projects.slice(0, maxProjects);
+
+  if (projects.length > projectsToScan.length) {
+    warnings.push(`GitLab: Scanning ${projectsToScan.length} of ${projects.length} projects to reduce API usage.`);
+  }
+  warnings.push(`GitLab: Commit scan per project is capped to ${maxCommitPages} page(s) for faster serverless responses.`);
 
   const activities: RepoActivity[] = [];
 
-  for (const project of projects) {
+  for (const project of projectsToScan) {
     try {
-      const commits = await fetchGitlabProjectCommits(project.id, token, dateWindow);
+      const commits = await fetchGitlabProjectCommits(project.id, token, dateWindow, {
+        maxPages: maxCommitPages,
+      });
       const filtered = commits.filter((commit) => matchAuthor(authorQuery, commit));
       if (filtered.length === 0) {
         continue;

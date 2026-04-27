@@ -7,7 +7,13 @@ import { mountDarkVeil } from './utils/darkVeil.js';
 import { mountMagicBento } from './utils/magicBento.js';
 
 const env = (import.meta as ImportMeta & { env: { VITE_API_BASE_URL?: string } }).env;
-const API_BASE_URL = (env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+const rawApiBaseUrl = (env.VITE_API_BASE_URL ?? '').trim().replace(/\/$/, '');
+const API_BASE_URL =
+  typeof window !== 'undefined' &&
+  window.location.hostname !== 'localhost' &&
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(rawApiBaseUrl)
+    ? ''
+    : rawApiBaseUrl;
 
 const defaultState: AppState = {
   repository: '',
@@ -324,6 +330,26 @@ function validateDateInputs(): string | undefined {
   return undefined;
 }
 
+function buildApiUrl(path: string): string {
+  if (!API_BASE_URL) {
+    return path;
+  }
+
+  if (API_BASE_URL.startsWith('/')) {
+    const base = API_BASE_URL.replace(/\/$/, '');
+    if (base === '/api' && path.startsWith('/api/')) {
+      return `${base}${path.slice('/api'.length)}`;
+    }
+    return `${base}${path}`;
+  }
+
+  try {
+    return new URL(path, API_BASE_URL).toString();
+  } catch {
+    return `${API_BASE_URL}${path}`;
+  }
+}
+
 function openTokenHelpModal(): void {
   ui.tokenHelpModal.classList.remove('hidden');
   ui.tokenHelpModal.classList.add('flex');
@@ -368,7 +394,7 @@ async function submitSearch(event: SubmitEvent): Promise<void> {
   ui.warningsNode.hidden = true;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/activity`, {
+    const response = await fetch(buildApiUrl('/api/activity'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -386,7 +412,21 @@ async function submitSearch(event: SubmitEvent): Promise<void> {
       throw new Error(`${err.error ?? 'Request failed.'}${suffix}`);
     }
 
-    const data = (await response.json()) as ActivityResponse;
+    const raw = (await response.json()) as (ActivityResponse & { success?: boolean; error?: string; message?: string });
+    if (raw.success === false) {
+      throw new Error(raw.error ?? raw.message ?? 'Request failed.');
+    }
+
+    const data: ActivityResponse = {
+      repository: raw.repository,
+      authorQuery: raw.authorQuery,
+      totalCommitCount: raw.totalCommitCount,
+      repoCount: raw.repoCount,
+      repositories: raw.repositories,
+      overallSummary: raw.overallSummary,
+      warnings: raw.warnings,
+    };
+
     renderWarnings(data.warnings);
     renderResult(data);
 
