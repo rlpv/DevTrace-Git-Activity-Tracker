@@ -57,6 +57,34 @@ function resolveProvider(repository: string): ProviderType {
   return 'github';
 }
 
+function parseRepositoryList(repositoryInput: string): string[] {
+  const items = repositoryInput
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  for (const item of items) {
+    const key = item
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/\/+$/, '')
+      .replace(/\.git$/i, '');
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(item);
+  }
+
+  return unique;
+}
+
 activityRouter.post('/', async (req, res) => {
   if (!isRequestBody(req.body)) {
     return sendStructuredError(res, 400, 'INVALID_REQUEST', 'Invalid request payload.');
@@ -64,6 +92,7 @@ activityRouter.post('/', async (req, res) => {
 
   const payload = req.body;
   const repository = payload.repository?.trim() ?? '';
+  const repositoryList = parseRepositoryList(repository);
   const authorQuery = payload.authorQuery.trim();
   const token = payload.token?.trim() || undefined;
 
@@ -78,21 +107,26 @@ activityRouter.post('/', async (req, res) => {
     warnings.push('Token not provided: scanning public repositories for the target username only.');
   }
 
-  if (!token && repository) {
+  if (!token && repositoryList.length > 0) {
     warnings.push('Token not provided: only public access is available for the selected repository.');
   }
 
   try {
     let repositories: RepoActivity[] = [];
 
-    if (repository) {
-      const provider = resolveProvider(repository);
-      const repoActivity =
-        provider === 'gitlab'
-          ? await fetchGitlabRepositoryActivity(repository, authorQuery, token, dateWindow)
-          : await fetchGithubRepositoryActivity(repository, authorQuery, token, dateWindow);
-
-      repositories = [repoActivity];
+    if (repositoryList.length > 0) {
+      for (const repoInput of repositoryList) {
+        try {
+          const provider = resolveProvider(repoInput);
+          const repoActivity =
+            provider === 'gitlab'
+              ? await fetchGitlabRepositoryActivity(repoInput, authorQuery, token, dateWindow)
+              : await fetchGithubRepositoryActivity(repoInput, authorQuery, token, dateWindow);
+          repositories.push(repoActivity);
+        } catch {
+          warnings.push(`Repository skipped: ${repoInput}`);
+        }
+      }
     } else {
       const githubActivities = await fetchGithubAllActivity(authorQuery, authorQuery, token, dateWindow, warnings);
       let gitlabActivities: RepoActivity[] = [];

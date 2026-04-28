@@ -7,7 +7,16 @@ export function formatDate(isoDate: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return isoDate;
   }
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZoneName: 'short',
+  });
 }
 
 export function escapeHtml(value: string): string {

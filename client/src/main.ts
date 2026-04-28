@@ -238,6 +238,8 @@ function renderRepo(repo: RepoActivity, index: number): string {
         <ul class="scroll-thin mt-2 grid max-h-64 gap-2 overflow-auto pr-1">
           ${repo.commits
             .map((commit) => {
+              const [headline, ...details] = commit.message.split('\n');
+              const description = details.join('\n').trim();
               const files = commit.files && commit.files.length > 0
                 ? `<p class="mt-1 text-xs text-slate-500">Files: ${escapeHtml(commit.files.slice(0, 12).join(', '))}</p>`
                 : '';
@@ -246,10 +248,10 @@ function renderRepo(repo: RepoActivity, index: number): string {
                 <li class="commit-item rounded-lg border border-[#30363d] bg-[#161b22] p-2">
                   <div class="flex items-center justify-between gap-2 text-xs text-slate-300">
                     <strong>${escapeHtml(shortHash(commit.hash))}</strong>
-                    <span>${escapeHtml(formatDate(commit.date))}</span>
+                    <span title="${escapeHtml(commit.date)}">Committed: ${escapeHtml(formatDate(commit.date))}</span>
                   </div>
-                  <p class="mt-1 text-sm">${escapeHtml(commit.message)}</p>
-                  <p class="mt-1 text-xs text-slate-400">Author: ${escapeHtml(commit.author)}${commit.authorEmail ? ` (${escapeHtml(commit.authorEmail)})` : ''}</p>
+                  <p class="mt-1 text-sm">${escapeHtml(headline || commit.message)}</p>
+                  ${description ? `<p class="mt-1 text-xs text-slate-400" style="white-space: pre-wrap;">Description: ${escapeHtml(description)}</p>` : ''}
                   ${files}
                 </li>
               `;
