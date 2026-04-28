@@ -1,4 +1,5 @@
-import { CommitEntry, DateWindow, RepoActivity } from '../types.js';
+import { CommitEntry, DateWindow, IdentityMode, RepoActivity } from '../types.js';
+import { commitMatchesIdentity, isMergeCommitMessage } from './identity.js';
 
 interface GitlabProject {
   id: number;
@@ -15,6 +16,8 @@ interface GitlabCommit {
   message: string;
   author_name: string;
   author_email: string;
+  committer_name?: string;
+  committer_email?: string;
 }
 
 function hasMorePage<T>(items: T[]): boolean {
@@ -54,30 +57,6 @@ function normalizeGitlabRepo(input: string): string | undefined {
   }
 
   return undefined;
-}
-
-function matchAuthor(authorQuery: string, commit: CommitEntry): boolean {
-  const query = authorQuery.trim().toLowerCase().replace(/^@/, '');
-  if (!query) {
-    return true;
-  }
-
-  const identities = [commit.author, commit.authorEmail ?? '']
-    .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
-    .filter(Boolean);
-
-  for (const identity of identities) {
-    if (identity === query) {
-      return true;
-    }
-
-    const atIndex = identity.indexOf('@');
-    if (atIndex > 0 && identity.slice(0, atIndex) === query) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function buildGitlabHeaders(token?: string): Record<string, string> {
@@ -160,6 +139,10 @@ async function fetchGitlabProjectCommits(
         author: commit.author_name,
         authorEmail: commit.author_email,
         date: commit.authored_date || commit.committed_date,
+        sourceMeta: {
+          committer: commit.committer_name,
+          committerEmail: commit.committer_email,
+        },
       });
     }
 
@@ -225,6 +208,8 @@ export async function fetchGitlabRepositoryActivity(
   authorQuery: string,
   token: string | undefined,
   dateWindow: DateWindow,
+  identityMode: IdentityMode = 'author-only',
+  excludeMergeCommits = false,
 ): Promise<RepoActivity> {
   const pathWithNamespace = normalizeGitlabRepo(repository);
   if (!pathWithNamespace) {
@@ -233,7 +218,12 @@ export async function fetchGitlabRepositoryActivity(
 
   const project = await fetchGitlabProject(pathWithNamespace, token);
   const commits = await fetchGitlabProjectCommits(project.id, token, dateWindow);
-  const filtered = commits.filter((commit) => matchAuthor(authorQuery, commit));
+  const filtered = commits.filter((commit) => {
+    if (excludeMergeCommits && isMergeCommitMessage(commit.message)) {
+      return false;
+    }
+    return commitMatchesIdentity(commit, authorQuery, identityMode);
+  });
 
   return {
     repoName: project.name,
@@ -252,6 +242,8 @@ export async function fetchGitlabAllActivity(
   token: string | undefined,
   dateWindow: DateWindow,
   warnings: string[],
+  identityMode: IdentityMode = 'author-only',
+  excludeMergeCommits = false,
 ): Promise<RepoActivity[]> {
   const projects = token
     ? await fetchGitlabAccessibleProjects(token)
@@ -276,7 +268,12 @@ export async function fetchGitlabAllActivity(
       const commits = await fetchGitlabProjectCommits(project.id, token, dateWindow, {
         maxPages: maxCommitPages,
       });
-      const filtered = commits.filter((commit) => matchAuthor(authorQuery, commit));
+      const filtered = commits.filter((commit) => {
+        if (excludeMergeCommits && isMergeCommitMessage(commit.message)) {
+          return false;
+        }
+        return commitMatchesIdentity(commit, authorQuery, identityMode);
+      });
       if (filtered.length === 0) {
         continue;
       }

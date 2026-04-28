@@ -1,5 +1,5 @@
 import './styles.css';
-import { ActivityRequest, ActivityResponse, AppState, DateFilter, RepoActivity } from './types/index.js';
+import { ActivityRequest, ActivityResponse, AppState, DateFilter, RepoActivity, ReportGenerateRequest, ReportGenerateResponse, SummaryStyle } from './types/index.js';
 import { escapeHtml, formatDate, shortHash } from './utils/format.js';
 import { loadPreferences, savePreferences } from './utils/storage.js';
 import { dateModeLabel, summaryStyleLabel } from './utils/summary.js';
@@ -218,6 +218,30 @@ function copyIconButton(copyType: 'overall' | 'repo', label: string, repoIndex?:
   `;
 }
 
+function renderAiReportSection(): string {
+  return `
+    <section class="overall-card rounded-xl border border-[#30363d] bg-[#0f141b] p-3">
+      <header class="flex flex-col items-start justify-between gap-2 md:flex-row">
+        <div>
+          <h3 class="m-0 text-base font-semibold">AI Report</h3>
+          <p class="mt-1 text-xs text-slate-400">Generate a readable report from the current scanned commits.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="aiReportStyle" class="field-input h-9 min-w-[150px] text-sm">
+            <option value="short">Short</option>
+            <option value="professional" selected>Professional</option>
+            <option value="standup">Standup-style</option>
+            <option value="detailed">Detailed</option>
+          </select>
+          <button id="generateAiReport" type="button" class="btn-primary h-9 px-3">Generate</button>
+          <button id="copyAiReport" type="button" class="btn-secondary h-9 px-3" disabled>Copy</button>
+        </div>
+      </header>
+      <pre id="aiReportOutput" class="summary-pre mt-2 text-slate-300">No AI report yet. Click Generate.</pre>
+    </section>
+  `;
+}
+
 function renderRepo(repo: RepoActivity, index: number): string {
   return `
     <article class="repo-card rounded-xl border border-[#30363d] bg-[#0f141b] p-3">
@@ -287,6 +311,7 @@ function renderResult(response: ActivityResponse): void {
   }
 
   ui.outputNode.innerHTML = `
+    ${renderAiReportSection()}
     <section class="overall-card rounded-xl border border-[#30363d] bg-[#0f141b] p-3">
       <header class="flex flex-col items-start justify-between gap-2 md:flex-row">
         <div>
@@ -303,6 +328,7 @@ function renderResult(response: ActivityResponse): void {
   `;
 
   wireCopyButtons(response);
+  wireAiReportActions(response);
 }
 
 async function copyText(text: string): Promise<void> {
@@ -330,6 +356,92 @@ function wireCopyButtons(response: ActivityResponse): void {
         ui.statusNode.textContent = 'Copy failed. Clipboard permissions may be blocked.';
       }
     });
+  });
+}
+
+function resolveDateLabel(): string {
+  if (state.dateFilterMode === 'specific') {
+    return `Specific date: ${state.specificDate || 'Not set'}`;
+  }
+  return `Range: ${state.rangeStart || 'Not set'} to ${state.rangeEnd || 'Not set'}`;
+}
+
+async function generateAiReport(response: ActivityResponse): Promise<void> {
+  const styleNode = ui.outputNode.querySelector<HTMLSelectElement>('#aiReportStyle');
+  const generateNode = ui.outputNode.querySelector<HTMLButtonElement>('#generateAiReport');
+  const copyNode = ui.outputNode.querySelector<HTMLButtonElement>('#copyAiReport');
+  const aiOutputNode = ui.outputNode.querySelector<HTMLElement>('#aiReportOutput');
+  if (!styleNode || !generateNode || !copyNode || !aiOutputNode) {
+    return;
+  }
+
+  const style = (styleNode.value as SummaryStyle) || 'professional';
+  const payload: ReportGenerateRequest = {
+    authorQuery: response.authorQuery,
+    repositories: response.repositories,
+    style,
+    dateLabel: resolveDateLabel(),
+    identityMode: 'author-only',
+    excludeMergeCommits: false,
+  };
+
+  generateNode.disabled = true;
+  copyNode.disabled = true;
+  aiOutputNode.textContent = 'Generating AI report...';
+  ui.statusNode.textContent = 'Generating AI report...';
+
+  try {
+    const reportResponse = await fetch(buildApiUrl('/api/reports/generate'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!reportResponse.ok) {
+      const err = (await reportResponse.json().catch(() => ({ error: 'Report request failed.' }))) as {
+        error?: string;
+      };
+      throw new Error(err.error ?? 'Report request failed.');
+    }
+
+    const raw = (await reportResponse.json()) as (ReportGenerateResponse & { success?: boolean; error?: string; message?: string });
+    if (raw.success === false || !raw.report) {
+      throw new Error(raw.error ?? raw.message ?? 'Report request failed.');
+    }
+
+    aiOutputNode.textContent = raw.report;
+    copyNode.disabled = false;
+    ui.statusNode.textContent = 'AI report generated.';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to generate AI report.';
+    aiOutputNode.textContent = `Unable to generate AI report.\n${message}`;
+    ui.statusNode.textContent = message;
+  } finally {
+    generateNode.disabled = false;
+  }
+}
+
+function wireAiReportActions(response: ActivityResponse): void {
+  const generateNode = ui.outputNode.querySelector<HTMLButtonElement>('#generateAiReport');
+  const copyNode = ui.outputNode.querySelector<HTMLButtonElement>('#copyAiReport');
+  const aiOutputNode = ui.outputNode.querySelector<HTMLElement>('#aiReportOutput');
+  if (!generateNode || !copyNode || !aiOutputNode) {
+    return;
+  }
+
+  generateNode.addEventListener('click', async () => {
+    await generateAiReport(response);
+  });
+
+  copyNode.addEventListener('click', async () => {
+    try {
+      await copyText(aiOutputNode.textContent ?? '');
+      ui.statusNode.textContent = 'AI report copied to clipboard.';
+    } catch {
+      ui.statusNode.textContent = 'Copy failed. Clipboard permissions may be blocked.';
+    }
   });
 }
 
@@ -421,6 +533,8 @@ async function submitSearch(event: SubmitEvent): Promise<void> {
     summaryStyle: state.summaryStyle,
     dateFilter: buildDateFilter(),
     token: token || undefined,
+    identityMode: 'author-only',
+    excludeMergeCommits: false,
   };
 
   ui.statusNode.textContent = 'Fetching repository activity...';

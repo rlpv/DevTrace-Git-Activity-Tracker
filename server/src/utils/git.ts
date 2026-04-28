@@ -1,36 +1,9 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { CommitEntry, DateWindow } from '../types.js';
+import { CommitEntry, DateWindow, IdentityMode } from '../types.js';
+import { commitMatchesIdentity, isMergeCommitMessage } from './identity.js';
 
 const execFileAsync = promisify(execFile);
-
-function matchAuthor(commit: CommitEntry, authorQuery: string): boolean {
-  const query = authorQuery.trim().toLowerCase().replace(/^@/, '');
-  if (!query) {
-    return true;
-  }
-
-  const identities = [
-    commit.author,
-    commit.authorEmail ?? '',
-    commit.sourceMeta?.username ?? '',
-  ]
-    .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
-    .filter(Boolean);
-
-  for (const identity of identities) {
-    if (identity === query) {
-      return true;
-    }
-
-    const atIndex = identity.indexOf('@');
-    if (atIndex > 0 && identity.slice(0, atIndex) === query) {
-      return true;
-    }
-  }
-
-  return false;
-}
 
 function parseGitLog(output: string): CommitEntry[] {
   return output
@@ -39,7 +12,7 @@ function parseGitLog(output: string): CommitEntry[] {
     .filter(Boolean)
     .map((chunk) => {
       const lines = chunk.split('\n');
-      const [hash = '', author = '', email = '', date = '', message = ''] = lines[0]?.split('\u001f') ?? [];
+      const [hash = '', author = '', email = '', date = '', committer = '', committerEmail = '', message = ''] = lines[0]?.split('\u001f') ?? [];
       const files = lines.slice(1).map((line) => line.trim()).filter(Boolean);
 
       return {
@@ -49,6 +22,10 @@ function parseGitLog(output: string): CommitEntry[] {
         date,
         message,
         files: files.length > 0 ? files : undefined,
+        sourceMeta: {
+          committer,
+          committerEmail,
+        },
       };
     })
     .filter((commit) => Boolean(commit.hash));
@@ -58,6 +35,8 @@ export async function readLocalRepoCommits(
   repoPath: string,
   authorQuery: string,
   dateWindow: DateWindow,
+  identityMode: IdentityMode = 'author-only',
+  excludeMergeCommits = false,
 ): Promise<CommitEntry[]> {
   const args = [
     '-C',
@@ -65,7 +44,7 @@ export async function readLocalRepoCommits(
     'log',
     '--all',
     '--date=iso-strict',
-    '--pretty=format:%H%x1f%an%x1f%ae%x1f%ad%x1f%s%x1e',
+    '--pretty=format:%H%x1f%an%x1f%ae%x1f%ad%x1f%cn%x1f%ce%x1f%s%x1e',
     '--name-only',
   ];
 
@@ -81,5 +60,10 @@ export async function readLocalRepoCommits(
     maxBuffer: 1024 * 1024 * 20,
   });
 
-  return parseGitLog(stdout).filter((commit) => matchAuthor(commit, authorQuery));
+  return parseGitLog(stdout).filter((commit) => {
+    if (excludeMergeCommits && isMergeCommitMessage(commit.message)) {
+      return false;
+    }
+    return commitMatchesIdentity(commit, authorQuery, identityMode);
+  });
 }

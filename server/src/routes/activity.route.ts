@@ -3,6 +3,7 @@ import { ActivityRequest, ActivityResponse, ProviderType, RepoActivity } from '.
 import { resolveDateWindow } from '../utils/date.js';
 import { fetchGithubAllActivity, fetchGithubRepositoryActivity, GitHubApiError } from '../utils/github.js';
 import { fetchGitlabAllActivity, fetchGitlabRepositoryActivity } from '../utils/gitlab.js';
+import { isIdentityMode } from '../utils/identity.js';
 import { finalizeRepositories, summarizeOverall } from '../utils/normalize.js';
 
 const activityRouter = Router();
@@ -95,6 +96,8 @@ activityRouter.post('/', async (req, res) => {
   const repositoryList = parseRepositoryList(repository);
   const authorQuery = payload.authorQuery.trim();
   const token = payload.token?.trim() || undefined;
+  const identityMode = isIdentityMode(payload.identityMode) ? payload.identityMode : 'author-only';
+  const excludeMergeCommits = Boolean(payload.excludeMergeCommits);
 
   if (!authorQuery) {
     return sendStructuredError(res, 400, 'INVALID_AUTHOR_QUERY', 'Username or author is required.');
@@ -118,21 +121,20 @@ activityRouter.post('/', async (req, res) => {
       for (const repoInput of repositoryList) {
         try {
           const provider = resolveProvider(repoInput);
-          const repoActivity =
-            provider === 'gitlab'
-              ? await fetchGitlabRepositoryActivity(repoInput, authorQuery, token, dateWindow)
-              : await fetchGithubRepositoryActivity(repoInput, authorQuery, token, dateWindow);
+          const repoActivity = provider === 'gitlab'
+            ? await fetchGitlabRepositoryActivity(repoInput, authorQuery, token, dateWindow, identityMode, excludeMergeCommits)
+            : await fetchGithubRepositoryActivity(repoInput, authorQuery, token, dateWindow, identityMode, excludeMergeCommits);
           repositories.push(repoActivity);
         } catch {
           warnings.push(`Repository skipped: ${repoInput}`);
         }
       }
     } else {
-      const githubActivities = await fetchGithubAllActivity(authorQuery, authorQuery, token, dateWindow, warnings);
+      const githubActivities = await fetchGithubAllActivity(authorQuery, authorQuery, token, dateWindow, warnings, identityMode, excludeMergeCommits);
       let gitlabActivities: RepoActivity[] = [];
 
       try {
-        gitlabActivities = await fetchGitlabAllActivity(authorQuery, authorQuery, token, dateWindow, warnings);
+        gitlabActivities = await fetchGitlabAllActivity(authorQuery, authorQuery, token, dateWindow, warnings, identityMode, excludeMergeCommits);
       } catch {
         warnings.push('GitLab user scan was skipped or unavailable for the target.');
       }

@@ -1,4 +1,5 @@
-import { CommitEntry, DateWindow, RepoActivity } from '../types.js';
+import { CommitEntry, DateWindow, IdentityMode, RepoActivity } from '../types.js';
+import { commitMatchesIdentity, isMergeCommitMessage } from './identity.js';
 
 export type GitHubErrorCode =
   | 'GITHUB_INVALID_TOKEN'
@@ -29,9 +30,16 @@ interface GithubCommitItem {
       email: string;
       date: string;
     };
+    committer?: {
+      name?: string;
+      email?: string;
+    };
     message: string;
   };
   author: {
+    login: string;
+  } | null;
+  committer: {
     login: string;
   } | null;
 }
@@ -91,34 +99,6 @@ function normalizeGithubRepo(input: string): string | undefined {
   }
 
   return undefined;
-}
-
-function matchAuthor(authorQuery: string, commit: CommitEntry): boolean {
-  const query = authorQuery.trim().toLowerCase().replace(/^@/, '');
-  if (!query) {
-    return true;
-  }
-
-  const identities = [
-    commit.author,
-    commit.authorEmail ?? '',
-    commit.sourceMeta?.username ?? '',
-  ]
-    .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
-    .filter(Boolean);
-
-  for (const identity of identities) {
-    if (identity === query) {
-      return true;
-    }
-
-    const atIndex = identity.indexOf('@');
-    if (atIndex > 0 && identity.slice(0, atIndex) === query) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function buildGithubHeaders(token?: string): Record<string, string> {
@@ -330,6 +310,9 @@ async function fetchGithubRepoCommits(
         date: commit.commit.author?.date ?? '',
         sourceMeta: {
           username: commit.author?.login,
+          committer: commit.commit.committer?.name,
+          committerEmail: commit.commit.committer?.email,
+          committerUsername: commit.committer?.login,
         },
       });
     }
@@ -380,6 +363,8 @@ export async function fetchGithubRepositoryActivity(
   authorQuery: string,
   token: string | undefined,
   dateWindow: DateWindow,
+  identityMode: IdentityMode = 'author-only',
+  excludeMergeCommits = false,
 ): Promise<RepoActivity> {
   const repoFullName = normalizeGithubRepo(repository);
   if (!repoFullName) {
@@ -388,7 +373,12 @@ export async function fetchGithubRepositoryActivity(
 
   const repoInfo = await fetchGithubRepoInfo(repoFullName, token);
   const commits = await fetchGithubRepoCommits(repoInfo.full_name, token, dateWindow, authorQuery);
-  const filtered = commits.filter((commit) => matchAuthor(authorQuery, commit));
+  const filtered = commits.filter((commit) => {
+    if (excludeMergeCommits && isMergeCommitMessage(commit.message)) {
+      return false;
+    }
+    return commitMatchesIdentity(commit, authorQuery, identityMode);
+  });
 
   return {
     repoName: repoInfo.name,
@@ -407,6 +397,8 @@ export async function fetchGithubAllActivity(
   token: string | undefined,
   dateWindow: DateWindow,
   warnings: string[],
+  identityMode: IdentityMode = 'author-only',
+  excludeMergeCommits = false,
 ): Promise<RepoActivity[]> {
   const repos = token
     ? await fetchGithubAccessibleRepos(token)
@@ -431,7 +423,12 @@ export async function fetchGithubAllActivity(
       const commits = await fetchGithubRepoCommits(repo.full_name, token, dateWindow, authorQuery, {
         maxPages: maxCommitPages,
       });
-      const filtered = commits.filter((commit) => matchAuthor(authorQuery, commit));
+      const filtered = commits.filter((commit) => {
+        if (excludeMergeCommits && isMergeCommitMessage(commit.message)) {
+          return false;
+        }
+        return commitMatchesIdentity(commit, authorQuery, identityMode);
+      });
 
       if (filtered.length === 0) {
         continue;

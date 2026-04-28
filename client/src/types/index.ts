@@ -1,6 +1,7 @@
 export type SummaryStyle = 'short' | 'professional' | 'detailed' | 'standup';
 export type DateFilterMode = 'specific' | 'range';
 export type ProviderType = 'github' | 'gitlab';
+export type IdentityMode = 'author-only' | 'committer-only' | 'author-or-committer';
 
 export interface DateFilter {
   mode: DateFilterMode;
@@ -44,6 +45,21 @@ export interface ActivityRequest {
   token?: string;
   dateFilter: DateFilter;
   summaryStyle: SummaryStyle;
+  identityMode?: IdentityMode;
+  excludeMergeCommits?: boolean;
+}
+
+export interface ReportGenerateRequest {
+  authorQuery: string;
+  repositories: RepoActivity[];
+  style: SummaryStyle;
+  dateLabel?: string;
+  identityMode?: IdentityMode;
+  excludeMergeCommits?: boolean;
+}
+
+export interface ReportGenerateResponse {
+  report: string;
 }
 
 export interface AppState {
