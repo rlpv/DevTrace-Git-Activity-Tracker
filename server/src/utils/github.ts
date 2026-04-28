@@ -94,20 +94,31 @@ function normalizeGithubRepo(input: string): string | undefined {
 }
 
 function matchAuthor(authorQuery: string, commit: CommitEntry): boolean {
-  const query = authorQuery.trim().toLowerCase();
+  const query = authorQuery.trim().toLowerCase().replace(/^@/, '');
   if (!query) {
     return true;
   }
 
-  const text = [
+  const identities = [
     commit.author,
     commit.authorEmail ?? '',
     commit.sourceMeta?.username ?? '',
   ]
-    .join(' ')
-    .toLowerCase();
+    .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
+    .filter(Boolean);
 
-  return text.includes(query);
+  for (const identity of identities) {
+    if (identity === query) {
+      return true;
+    }
+
+    const atIndex = identity.indexOf('@');
+    if (atIndex > 0 && identity.slice(0, atIndex) === query) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function buildGithubHeaders(token?: string): Record<string, string> {
@@ -448,3 +459,4 @@ export async function fetchGithubAllActivity(
 
   return activities;
 }
+

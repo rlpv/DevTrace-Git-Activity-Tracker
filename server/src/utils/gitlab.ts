@@ -57,12 +57,27 @@ function normalizeGitlabRepo(input: string): string | undefined {
 }
 
 function matchAuthor(authorQuery: string, commit: CommitEntry): boolean {
-  const query = authorQuery.trim().toLowerCase();
+  const query = authorQuery.trim().toLowerCase().replace(/^@/, '');
   if (!query) {
     return true;
   }
-  const text = `${commit.author} ${commit.authorEmail ?? ''}`.toLowerCase();
-  return text.includes(query);
+
+  const identities = [commit.author, commit.authorEmail ?? '']
+    .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
+    .filter(Boolean);
+
+  for (const identity of identities) {
+    if (identity === query) {
+      return true;
+    }
+
+    const atIndex = identity.indexOf('@');
+    if (atIndex > 0 && identity.slice(0, atIndex) === query) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function buildGitlabHeaders(token?: string): Record<string, string> {
@@ -282,3 +297,4 @@ export async function fetchGitlabAllActivity(
 
   return activities;
 }
+

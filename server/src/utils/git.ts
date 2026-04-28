@@ -5,20 +5,31 @@ import { CommitEntry, DateWindow } from '../types.js';
 const execFileAsync = promisify(execFile);
 
 function matchAuthor(commit: CommitEntry, authorQuery: string): boolean {
-  const query = authorQuery.trim().toLowerCase();
+  const query = authorQuery.trim().toLowerCase().replace(/^@/, '');
   if (!query) {
     return true;
   }
 
-  const haystack = [
+  const identities = [
     commit.author,
     commit.authorEmail ?? '',
     commit.sourceMeta?.username ?? '',
   ]
-    .join(' ')
-    .toLowerCase();
+    .map((value) => value.trim().toLowerCase().replace(/^@/, ''))
+    .filter(Boolean);
 
-  return haystack.includes(query);
+  for (const identity of identities) {
+    if (identity === query) {
+      return true;
+    }
+
+    const atIndex = identity.indexOf('@');
+    if (atIndex > 0 && identity.slice(0, atIndex) === query) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function parseGitLog(output: string): CommitEntry[] {
